@@ -1,13 +1,13 @@
-"""RAG система на основе Langchain."""
+"""RAG система на основе Langchain для генерации постов."""
 import os
+import re
 import requests
 from typing import List, Optional, Any
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.language_models import BaseLanguageModel
 
 import config
@@ -48,6 +48,18 @@ class RAGSystem:
         except Exception:
             return False
     
+    def _is_mostly_english(self, text: str) -> bool:
+        """Проверяет, написан ли текст в основном на английском."""
+        if not text:
+            return False
+        
+        # Подсчитываем кириллические и латинские символы
+        cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', text))
+        latin_count = len(re.findall(r'[A-Za-z]', text))
+        
+        # Если латинских символов больше чем кириллических в 2 раза - вероятно английский
+        return latin_count > cyrillic_count * 2 and latin_count > 20
+    
     def _init_llm(self):
         """Инициализирует LLM (заглушку или реальную модель)."""
         if self.use_stub_llm:
@@ -67,14 +79,20 @@ class RAGSystem:
             except ImportError:
                 from langchain_community.chat_models import ChatOllama
             
+            # Проверяем, что используется правильная модель
+            model_name = ollama_config.LLM_MODEL
+            if "qwen" not in model_name.lower():
+                print(f"⚠️ Внимание: используется модель {model_name}, ожидается qwen3:4b")
+            
             self.llm = ChatOllama(
-                model=ollama_config.LLM_MODEL,
+                model=model_name,
                 base_url=ollama_config.OLLAMA_URL,
-                temperature=0.2,  # Низкая температура для более детерминированных ответов
-                num_predict=100,  # Короткие ответы
-                repeat_penalty=1.3,  # Штраф за повторения
+                temperature=0.7,  # Температура для креативной генерации
+                num_predict=300,  # Достаточно для поста
+                repeat_penalty=1.2,
                 top_p=0.9
             )
+            print(f"✓ LLM инициализирован: {model_name}")
         except Exception as e:
             print(f"⚠️ Ошибка инициализации LLM: {e}, используем заглушку")
             self.llm = LLMStub(model_name="stub")
@@ -195,24 +213,56 @@ class RAGSystem:
         if self.llm is None:
             raise ValueError("LLM не инициализирован.")
         
-        # Создаем retriever
-        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 5})
+        # Создаем retriever с ограниченным количеством контекста (кратко)
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 3})
         
-        # Форматируем контекст из документов
+        # Форматируем контекст из документов, убирая метаданные и ограничивая длину
         def format_docs(docs: List[Document]) -> str:
-            return "\n\n".join(doc.page_content for doc in docs)
+            """Форматирует документы, убирая метаданные и ограничивая длину."""
+            texts = []
+            max_doc_length = 200  # Максимальная длина одного документа
+            max_total_length = 500  # Максимальная общая длина контекста
+            
+            for doc in docs:
+                text = doc.page_content
+                # Убираем временные метки типа [2025-10-28T14:37:09]
+                text = re.sub(r'\[\d{4}-\d{2}-\d{2}T[\d:]+\]', '', text)
+                # Убираем имена в начале строки типа "Имя: "
+                text = re.sub(r'^[А-Яа-яA-Za-z\s]+:\s*', '', text, flags=re.MULTILINE)
+                text = text.strip()
+                
+                # Ограничиваем длину каждого документа
+                if len(text) > max_doc_length:
+                    text = text[:max_doc_length] + "..."
+                
+                if text:
+                    texts.append(text)
+            
+            # Объединяем и ограничиваем общую длину
+            result = "\n".join(texts)
+            if len(result) > max_total_length:
+                # Берем первые документы до лимита
+                result = result[:max_total_length].rsplit('\n', 1)[0] + "..."
+            
+            return result
         
-        # Создаем промпт с явным указанием формата ответа
-        prompt_template = """Ты помощник. Отвечай на вопросы на основе контекста из чата Telegram.
+        # Четкий промпт для генерации постов на русском языке
+        prompt_template = """Ты креативный копирайтер. Напиши оригинальный пост для социальной сети на русском языке.
 
-Контекст:
+Контекст из чата (для понимания темы):
 {context}
 
-Вопрос: {question}
+Тема для поста: {question}
 
-ВАЖНО: Отвечай ТОЛЬКО на русском языке. Будь кратким (1-2 предложения).
+ТРЕБОВАНИЯ:
+1. Напиши НОВЫЙ оригинальный пост на русском языке
+2. НЕ копируй текст из контекста дословно
+3. Используй контекст только для понимания темы
+4. Пост должен быть интересным и актуальным
+5. Длина: 2-5 предложений
+6. Пиши ТОЛЬКО на русском языке
 
-Ответ:"""
+Напиши пост:"""
         
         prompt = ChatPromptTemplate.from_template(prompt_template)
         
@@ -279,15 +329,27 @@ class RAGSystem:
             print(f"✗ Ошибка при загрузке базы знаний: {e}")
             return False
     
-    def query(self, question: str) -> str:
+    def _is_mostly_english(self, text: str) -> bool:
+        """Проверяет, написан ли текст в основном на английском."""
+        if not text:
+            return False
+        
+        # Подсчитываем кириллические и латинские символы
+        cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', text))
+        latin_count = len(re.findall(r'[A-Za-z]', text))
+        
+        # Если латинских символов больше чем кириллических в 2 раза - вероятно английский
+        return latin_count > cyrillic_count * 2 and latin_count > 20
+    
+    def generate_post(self, idea: str) -> str:
         """
-        Выполняет запрос к RAG системе.
+        Генерирует пост на основе идеи и контекста из базы знаний.
         
         Args:
-            question: Вопрос пользователя
+            idea: Идея для поста
             
         Returns:
-            Ответ на основе базы знаний
+            Сгенерированный пост
             
         Raises:
             ValueError: Если RAG цепочка не инициализирована
@@ -296,65 +358,85 @@ class RAGSystem:
             raise ValueError("RAG цепочка не инициализирована. Сначала создайте или загрузите базу знаний.")
         
         try:
-            answer = self.qa_chain.invoke(question)
+            post = self.qa_chain.invoke(idea)
             
-            if not answer:
-                return "Не удалось получить ответ."
+            if not post:
+                return "Не удалось сгенерировать пост."
             
-            # Постобработка ответа - убираем артефакты промпта
-            answer_clean = answer.strip()
+            # Проверяем, что ответ на русском языке
+            post_clean = post.strip()
             
-            # Убираем строки с инструкциями
-            lines = answer_clean.split('\n')
+            # Если ответ на английском, пытаемся исправить
+            if self._is_mostly_english(post_clean):
+                print("⚠️ Обнаружен ответ на английском, повторяю запрос с усиленным промптом")
+                # Повторяем с более жестким промптом
+                enhanced_prompt = f"Напиши пост на русском языке на тему: {idea}. Контекст: {post_clean[:200]}"
+                post = self.qa_chain.invoke(enhanced_prompt)
+                post_clean = post.strip()
+            
+            # Очистка ответа от артефактов промпта
+            
+            # Убираем строки с инструкциями и метаданными
+            lines = post_clean.split('\n')
             filtered_lines = []
             skip_phrases = [
-                'используй следующие', 'use the following',
                 'контекст из чата:', 'context from',
-                'правила:', 'rules:', 'инструкции:',
-                'ответ (на русском', 'ответ:', 'answer:'
+                'тема/идея для поста:', 'идея для поста:',
+                'важно:', 'important:',
+                'пост:', 'post:'
             ]
             
             for line in lines:
                 line_lower = line.lower().strip()
-                # Пропускаем строки с инструкциями или заголовками промпта
+                # Пропускаем строки с инструкциями
                 if any(phrase in line_lower for phrase in skip_phrases):
-                    # Но оставляем строку, если она содержит реальный контент после заголовка
-                    if ':' in line and len(line.split(':', 1)[1].strip()) > 10:
-                        filtered_lines.append(line.split(':', 1)[1].strip())
+                    # Но оставляем контент после двоеточия, если он есть
+                    if ':' in line:
+                        content_after_colon = line.split(':', 1)[1].strip()
+                        if len(content_after_colon) > 20:  # Достаточно длинный контент
+                            filtered_lines.append(content_after_colon)
                     continue
-                if line.strip():
+                
+                # Убираем временные метки
+                line = re.sub(r'\[\d{4}-\d{2}-\d{2}T[\d:]+\]', '', line)
+                line = line.strip()
+                
+                if line and len(line) > 5:  # Минимальная длина строки
                     filtered_lines.append(line)
             
-            answer_clean = '\n'.join(filtered_lines).strip()
+            post_clean = '\n'.join(filtered_lines).strip()
             
             # Если после фильтрации ничего не осталось, возвращаем оригинал
-            if not answer_clean:
-                answer_clean = answer.strip()
+            if not post_clean:
+                post_clean = post.strip()
             
-            # Обрезаем слишком длинные ответы (максимум 200 символов)
-            if len(answer_clean) > 200:
-                # Пытаемся обрезать по последнему предложению
-                sentences = answer_clean.split('.')
-                result = []
-                total_len = 0
-                for sent in sentences:
-                    sent = sent.strip()
-                    if not sent:
-                        continue
-                    if total_len + len(sent) > 200:
-                        break
-                    result.append(sent)
-                    total_len += len(sent) + 2
-                answer_clean = '. '.join(result).strip()
-                if answer_clean and not answer_clean.endswith(('.', '!', '?')):
-                    answer_clean += '.'
-                if len(answer_clean) > 200:
-                    answer_clean = answer_clean[:197] + "..."
+            # Убираем дубликаты строк
+            unique_lines = []
+            seen = set()
+            for line in post_clean.split('\n'):
+                line_stripped = line.strip()
+                if line_stripped and line_stripped.lower() not in seen:
+                    seen.add(line_stripped.lower())
+                    unique_lines.append(line)
             
-            return answer_clean
+            post_clean = '\n'.join(unique_lines).strip()
+            
+            return post_clean
             
         except Exception as e:
-            return f"Ошибка при обработке запроса: {str(e)}"
+            return f"Ошибка при генерации поста: {str(e)}"
+    
+    def query(self, question: str) -> str:
+        """
+        Выполняет запрос к RAG системе (алиас для generate_post для обратной совместимости).
+        
+        Args:
+            question: Идея для поста
+            
+        Returns:
+            Сгенерированный пост
+        """
+        return self.generate_post(question)
     
     def is_ready(self) -> bool:
         """
