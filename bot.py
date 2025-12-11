@@ -10,6 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 import aiofiles
 import config
+import ollama_config
 from parser import parse_telegram_export
 from rag_system import RAGSystem
 
@@ -24,8 +25,8 @@ bot = Bot(token=config.BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# Глобальный экземпляр RAG системы
-rag_system = RAGSystem()
+# Глобальный экземпляр RAG системы (используем реальную модель Ollama)
+rag_system = RAGSystem(use_stub_llm=False)
 
 
 @dp.message(Command("start"))
@@ -103,9 +104,8 @@ async def handle_document(message: Message, state: FSMContext):
                 f"❌ Ошибка подключения к Ollama:\n\n{str(e)}\n\n"
                 "Убедитесь, что:\n"
                 "1. Ollama запущен (проверьте командой: ollama serve)\n"
-                "2. Модели установлены:\n"
-                f"   - ollama pull {config.EMBEDDING_MODEL}\n"
-                f"   - ollama pull {config.LLM_MODEL}\n"
+                "2. Модель для эмбеддингов установлена:\n"
+                f"   - ollama pull {ollama_config.EMBEDDING_MODEL}\n"
                 "3. Ollama доступен по адресу из .env файла"
             )
             os.unlink(tmp_path)
