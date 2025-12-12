@@ -221,7 +221,9 @@ async def handle_document(message: Message, state: FSMContext):
         
         # Создаем базу знаний
         try:
+            await message.answer("Начинаю создание базы знаний...")
             rag_system.build_knowledge_base(messages)
+            await message.answer("База знаний создана в памяти, сохраняю...")
         except ConnectionError as e:
             await message.answer(
                 f"❌ Ошибка подключения к Ollama:\n\n{str(e)}\n\n"
@@ -237,17 +239,33 @@ async def handle_document(message: Message, state: FSMContext):
             await message.answer(f"❌ Ошибка: {str(e)}")
             os.unlink(tmp_path)
             return
+        except Exception as e:
+            await message.answer(
+                f"❌ Неожиданная ошибка при создании базы знаний:\n{str(e)}\n\n"
+                "Проверьте логи для подробностей."
+            )
+            import traceback
+            print(f"Ошибка создания базы знаний: {e}")
+            traceback.print_exc()
+            os.unlink(tmp_path)
+            return
         
         # Сохраняем базу знаний с указанным именем
         try:
+            print(f"Сохраняю базу знаний '{kb_name}'...")
             rag_system.save_knowledge_base(kb_name)
+            print(f"✓ База знаний '{kb_name}' сохранена")
             current_kb_name = kb_name  # Обновляем текущую базу
             await state.update_data(creating_kb_name=None)  # Очищаем состояние
         except Exception as e:
+            import traceback
+            error_msg = str(e)
+            traceback.print_exc()
             await message.answer(
-                f"⚠️ База знаний создана, но не удалось сохранить: {str(e)}\n"
-                "Попробуйте снова позже."
+                f"⚠️ База знаний создана в памяти, но не удалось сохранить на диск:\n{error_msg}\n\n"
+                "Попробуйте снова позже или проверьте права доступа к директории."
             )
+            print(f"Ошибка сохранения базы знаний: {e}")
             os.unlink(tmp_path)
             return
         

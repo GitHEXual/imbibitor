@@ -48,8 +48,8 @@ class RAGSystem:
         except Exception:
             return False
     
-    def _is_mostly_english(self, text: str) -> bool:
-        """Проверяет, написан ли текст в основном на английском."""
+    def _is_mostly_russian(self, text: str) -> bool:
+        """Проверяет, написан ли текст в основном на русском."""
         if not text:
             return False
         
@@ -57,8 +57,21 @@ class RAGSystem:
         cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', text))
         latin_count = len(re.findall(r'[A-Za-z]', text))
         
-        # Если латинских символов больше чем кириллических в 2 раза - вероятно английский
-        return latin_count > cyrillic_count * 2 and latin_count > 20
+        # Если кириллических символов больше чем латинских - вероятно русский
+        # Или если кириллических символов достаточно много
+        return cyrillic_count > latin_count or cyrillic_count > 50
+    
+    def _is_mostly_english(self, text: str) -> bool:
+        """Проверяет, написан ли текст в основном на английском или другом языке."""
+        if not text:
+            return False
+        
+        # Подсчитываем кириллические и латинские символы
+        cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', text))
+        latin_count = len(re.findall(r'[A-Za-z]', text))
+        
+        # Если латинских символов больше чем кириллических в 2 раза - вероятно не русский
+        return latin_count > cyrillic_count * 2 and latin_count > 30
     
     def _init_llm(self):
         """Инициализирует LLM (заглушку или реальную модель)."""
@@ -79,16 +92,14 @@ class RAGSystem:
             except ImportError:
                 from langchain_community.chat_models import ChatOllama
             
-            # Проверяем, что используется правильная модель
+            # Используем модель из конфигурации
             model_name = ollama_config.LLM_MODEL
-            if "qwen" not in model_name.lower():
-                print(f"⚠️ Внимание: используется модель {model_name}, ожидается qwen3:4b")
             
             self.llm = ChatOllama(
                 model=model_name,
                 base_url=ollama_config.OLLAMA_URL,
-                temperature=0.7,  # Температура для креативной генерации
-                num_predict=300,  # Достаточно для поста
+                temperature=0.8,  # Температура для креативной генерации
+                num_predict=-1,  # Без ограничения длины
                 repeat_penalty=1.2,
                 top_p=0.9
             )
@@ -213,15 +224,13 @@ class RAGSystem:
         if self.llm is None:
             raise ValueError("LLM не инициализирован.")
         
-        # Создаем retriever с ограниченным количеством контекста (кратко)
-        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 3})
+        # Создаем retriever с большим количеством контекста для лучшего поиска смежных слов
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 8})
         
-        # Форматируем контекст из документов, убирая метаданные и ограничивая длину
+        # Форматируем контекст из документов, убирая метаданные
         def format_docs(docs: List[Document]) -> str:
-            """Форматирует документы, убирая метаданные и ограничивая длину."""
+            """Форматирует документы, убирая метаданные для использования в промпте."""
             texts = []
-            max_doc_length = 200  # Максимальная длина одного документа
-            max_total_length = 500  # Максимальная общая длина контекста
             
             for doc in docs:
                 text = doc.page_content
@@ -231,38 +240,23 @@ class RAGSystem:
                 text = re.sub(r'^[А-Яа-яA-Za-z\s]+:\s*', '', text, flags=re.MULTILINE)
                 text = text.strip()
                 
-                # Ограничиваем длину каждого документа
-                if len(text) > max_doc_length:
-                    text = text[:max_doc_length] + "..."
-                
-                if text:
+                if text and len(text) > 10:  # Минимальная длина
                     texts.append(text)
             
-            # Объединяем и ограничиваем общую длину
-            result = "\n".join(texts)
-            if len(result) > max_total_length:
-                # Берем первые документы до лимита
-                result = result[:max_total_length].rsplit('\n', 1)[0] + "..."
-            
-            return result
+            # Объединяем все релевантные фрагменты
+            return "\n".join(texts)
         
-        # Четкий промпт для генерации постов на русском языке
-        prompt_template = """Ты креативный копирайтер. Напиши оригинальный пост для социальной сети на русском языке.
+        # Очень жесткий промпт с требованием ТОЛЬКО русского языка
+        prompt_template = """Напиши пост для социальной сети.
 
-Контекст из чата (для понимания темы):
+Контекст из чата:
 {context}
 
-Тема для поста: {question}
+Тема: {question}
 
-ТРЕБОВАНИЯ:
-1. Напиши НОВЫЙ оригинальный пост на русском языке
-2. НЕ копируй текст из контекста дословно
-3. Используй контекст только для понимания темы
-4. Пост должен быть интересным и актуальным
-5. Длина: 2-5 предложений
-6. Пиши ТОЛЬКО на русском языке
+Напиши оригинальный пост на русском языке. Используй контекст для вдохновения. НЕ копируй текст из контекста дословно.
 
-Напиши пост:"""
+КРИТИЧЕСКИ ВАЖНО: Пиши ТОЛЬКО на русском языке. Запрещено использовать английский, немецкий или другие языки. Только русский язык."""
         
         prompt = ChatPromptTemplate.from_template(prompt_template)
         
@@ -329,17 +323,151 @@ class RAGSystem:
             print(f"✗ Ошибка при загрузке базы знаний: {e}")
             return False
     
-    def _is_mostly_english(self, text: str) -> bool:
-        """Проверяет, написан ли текст в основном на английском."""
+    def _extract_russian_text(self, text: str) -> str:
+        """Извлекает русский текст из многоязычного ответа."""
         if not text:
-            return False
+            return text
         
-        # Подсчитываем кириллические и латинские символы
-        cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', text))
-        latin_count = len(re.findall(r'[A-Za-z]', text))
+        lines = text.split('\n')
+        russian_lines = []
         
-        # Если латинских символов больше чем кириллических в 2 раза - вероятно английский
-        return latin_count > cyrillic_count * 2 and latin_count > 20
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+            
+            # Подсчитываем кириллические символы
+            cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', line_stripped))
+            latin_count = len(re.findall(r'[A-Za-z]', line_stripped))
+            
+            # Если в строке больше кириллических символов - это русский текст
+            if cyrillic_count > latin_count and cyrillic_count > 10:
+                russian_lines.append(line_stripped)
+        
+        result = '\n'.join(russian_lines).strip()
+        return result if result else text.strip()
+    
+    def _clean_post_response(self, text: str) -> str:
+        """Очищает ответ от промптов, инструкций и артефактов."""
+        if not text:
+            return text
+        
+        lines = text.split('\n')
+        filtered_lines = []
+        
+        # Фразы, которые указывают на промпт или инструкции
+        skip_phrases = [
+            'контекст из чата:', 'context from', 'релевантный контекст',
+            'тема для поста:', 'тема поста:', 'идея для поста:',
+            'требования:', 'важно:', 'important:', 'requirements:',
+            'напиши пост:', 'пост:', 'post:', 'write a post',
+            'напиши оригинальный пост', 'пиши только текст поста',
+            'insert background music', 'insert pictures', '[insert',
+            'требо', 'треб', 'напиши н', 'пиши т', 'используй контекст',
+            'длина:', 'length:', 'должен быть'
+        ]
+        
+        # Проверяем, не является ли весь текст промптом
+        text_lower = text.lower()
+        if any(phrase in text_lower for phrase in ['требования:', 'requirements:', 'важно:', 'important:']):
+            # Если есть структурированные требования, это скорее всего промпт
+            # Ищем начало реального поста после инструкций
+            found_start = False
+            for line in lines:
+                line_stripped = line.strip()
+                if not line_stripped:
+                    continue
+                
+                line_lower = line_stripped.lower()
+                
+                # Пропускаем строки с инструкциями
+                if any(phrase in line_lower for phrase in skip_phrases):
+                    # Но проверяем, есть ли контент после двоеточия
+                    if ':' in line_stripped:
+                        parts = line_stripped.split(':', 1)
+                        if len(parts) > 1:
+                            content = parts[1].strip()
+                            # Если после двоеточия достаточно длинный текст - это может быть пост
+                            if len(content) > 30 and not any(phrase in content.lower() for phrase in skip_phrases):
+                                filtered_lines.append(content)
+                                found_start = True
+                    continue
+                
+                # Убираем временные метки
+                line_clean = re.sub(r'\[\d{4}-\d{2}-\d{2}T[\d:]+\]', '', line_stripped)
+                line_clean = re.sub(r'\[.*?\]', '', line_clean)  # Убираем все квадратные скобки
+                line_clean = line_clean.strip()
+                
+                # Пропускаем строки не на русском языке
+                cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', line_clean))
+                latin_count = len(re.findall(r'[A-Za-z]', line_clean))
+                if latin_count > cyrillic_count * 2 and latin_count > 20:
+                    continue  # Пропускаем не-русские строки
+                
+                # Пропускаем очень короткие строки или строки с только пунктами списка
+                if len(line_clean) < 10:
+                    continue
+                
+                # Пропускаем строки, которые выглядят как пункты списка (начинаются с цифры или дефиса)
+                if re.match(r'^[\d\-•]\s*', line_clean):
+                    continue
+                
+                if line_clean:
+                    filtered_lines.append(line_clean)
+                    found_start = True
+            
+            if not found_start:
+                # Если не нашли начало поста, возвращаем оригинал без первых строк с инструкциями
+                filtered_lines = []
+                skip_count = 0
+                for line in lines:
+                    line_lower = line.lower().strip()
+                    if any(phrase in line_lower for phrase in skip_phrases):
+                        skip_count += 1
+                        continue
+                    if skip_count > 0:  # Пропустили инструкции, теперь берем контент
+                        line_clean = re.sub(r'\[.*?\]', '', line.strip())
+                        if line_clean and len(line_clean) > 10:
+                            filtered_lines.append(line_clean)
+        else:
+            # Обычная очистка без структурированных инструкций
+            for line in lines:
+                line_stripped = line.strip()
+                if not line_stripped:
+                    continue
+                
+                line_lower = line_stripped.lower()
+                
+                # Пропускаем строки с инструкциями
+                if any(phrase in line_lower for phrase in skip_phrases):
+                    continue
+                
+                # Убираем временные метки и квадратные скобки
+                line_clean = re.sub(r'\[\d{4}-\d{2}-\d{2}T[\d:]+\]', '', line_stripped)
+                line_clean = re.sub(r'\[.*?\]', '', line_clean)
+                line_clean = line_clean.strip()
+                
+                # Пропускаем строки не на русском языке
+                cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', line_clean))
+                latin_count = len(re.findall(r'[A-Za-z]', line_clean))
+                if latin_count > cyrillic_count * 2 and latin_count > 20:
+                    continue  # Пропускаем не-русские строки
+                
+                if line_clean and len(line_clean) > 5:
+                    filtered_lines.append(line_clean)
+        
+        result = '\n'.join(filtered_lines).strip()
+        
+        # Если результат слишком короткий или похож на промпт, возвращаем оригинал
+        if len(result) < 20:
+            # Пытаемся найти хоть что-то полезное в оригинале
+            original_lines = [l.strip() for l in text.split('\n') if l.strip()]
+            for line in original_lines:
+                if len(line) > 30 and not any(phrase in line.lower() for phrase in skip_phrases):
+                    result = line
+                    break
+        
+        return result if result else text.strip()
     
     def generate_post(self, idea: str) -> str:
         """
@@ -366,55 +494,51 @@ class RAGSystem:
             # Проверяем, что ответ на русском языке
             post_clean = post.strip()
             
-            # Если ответ на английском, пытаемся исправить
-            if self._is_mostly_english(post_clean):
-                print("⚠️ Обнаружен ответ на английском, повторяю запрос с усиленным промптом")
-                # Повторяем с более жестким промптом
-                enhanced_prompt = f"Напиши пост на русском языке на тему: {idea}. Контекст: {post_clean[:200]}"
+            # Если ответ не на русском, повторяем генерацию с более жестким промптом
+            max_retries = 2
+            retry_count = 0
+            while not self._is_mostly_russian(post_clean) and retry_count < max_retries:
+                retry_count += 1
+                print(f"⚠️ Обнаружен ответ не на русском языке (попытка {retry_count}/{max_retries}), повторяю запрос")
+                # Повторяем с очень жестким промптом на русском
+                enhanced_prompt = f"Напиши пост ТОЛЬКО на русском языке. Тема: {idea}. Пиши ТОЛЬКО на русском языке, никаких других языков."
                 post = self.qa_chain.invoke(enhanced_prompt)
                 post_clean = post.strip()
             
-            # Очистка ответа от артефактов промпта
+            # Если все еще не на русском, пытаемся извлечь русскую часть
+            if not self._is_mostly_russian(post_clean):
+                print("⚠️ Ответ все еще не на русском, пытаюсь извлечь русскую часть")
+                post_clean = self._extract_russian_text(post_clean)
             
-            # Убираем строки с инструкциями и метаданными
-            lines = post_clean.split('\n')
-            filtered_lines = []
-            skip_phrases = [
-                'контекст из чата:', 'context from',
-                'тема/идея для поста:', 'идея для поста:',
-                'важно:', 'important:',
-                'пост:', 'post:'
-            ]
+            # Агрессивная очистка ответа от промптов и инструкций
+            post_clean = self._clean_post_response(post_clean)
             
-            for line in lines:
-                line_lower = line.lower().strip()
-                # Пропускаем строки с инструкциями
-                if any(phrase in line_lower for phrase in skip_phrases):
-                    # Но оставляем контент после двоеточия, если он есть
-                    if ':' in line:
-                        content_after_colon = line.split(':', 1)[1].strip()
-                        if len(content_after_colon) > 20:  # Достаточно длинный контент
-                            filtered_lines.append(content_after_colon)
-                    continue
-                
-                # Убираем временные метки
-                line = re.sub(r'\[\d{4}-\d{2}-\d{2}T[\d:]+\]', '', line)
-                line = line.strip()
-                
-                if line and len(line) > 5:  # Минимальная длина строки
-                    filtered_lines.append(line)
-            
-            post_clean = '\n'.join(filtered_lines).strip()
+            # Финальная проверка - если все еще не на русском, извлекаем только русский текст
+            if not self._is_mostly_russian(post_clean):
+                print("⚠️ После очистки текст все еще не на русском, извлекаю русскую часть")
+                post_clean = self._extract_russian_text(post_clean)
             
             # Если после фильтрации ничего не осталось, возвращаем оригинал
-            if not post_clean:
-                post_clean = post.strip()
+            if not post_clean or len(post_clean.strip()) < 10:
+                # Пытаемся найти хоть что-то на русском в оригинале
+                russian_part = self._extract_russian_text(post.strip())
+                if russian_part and len(russian_part) > 10:
+                    post_clean = russian_part
+                else:
+                    post_clean = post.strip()
             
             # Убираем дубликаты строк
             unique_lines = []
             seen = set()
             for line in post_clean.split('\n'):
                 line_stripped = line.strip()
+                # Пропускаем не-русские строки
+                if line_stripped:
+                    cyrillic_count = len(re.findall(r'[А-Яа-яЁё]', line_stripped))
+                    latin_count = len(re.findall(r'[A-Za-z]', line_stripped))
+                    if latin_count > cyrillic_count * 2 and latin_count > 15:
+                        continue  # Пропускаем не-русские строки
+                
                 if line_stripped and line_stripped.lower() not in seen:
                     seen.add(line_stripped.lower())
                     unique_lines.append(line)
