@@ -1,4 +1,5 @@
 import requests
+import subprocess
 from typing import Optional
 from ollama_setup import OllamaSetup
 
@@ -28,14 +29,19 @@ class OllamaAPI:
         )
         return response.status_code == 200
     
-    def auth(self, token: str) -> bool:
-        response = requests.post(
-            f"{self.setup.base_url}/api/auth",
-            headers={"Authorization": f"Bearer {token}"}
+    def auth(self) -> str:
+        result = subprocess.run(
+            ["ollama", "signin"],
+            capture_output=True,
+            text=True
         )
-        return response.status_code == 200
+        return result.stdout.strip()
     
-    def logout(self) -> bool:
-        response = requests.post(f"{self.setup.base_url}/api/logout")
-        return response.status_code == 200
+    def logout(self) -> str:
+        result = subprocess.run(
+            ["ollama", "signout"],
+            capture_output=True,
+            text=True
+        )
+        return result.stdout.strip()
 
