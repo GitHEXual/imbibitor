@@ -1,6 +1,6 @@
 from typing import Optional
-from ollama_setup import OllamaSetup
-from ollama_api import OllamaAPI
+from .ollama_setup import OllamaSetup
+from .ollama_api import OllamaAPI
 
 
 class OllamaClient:

@@ -1,7 +1,7 @@
 import requests
 import subprocess
 from typing import Optional
-from ollama_setup import OllamaSetup
+from .ollama_setup import OllamaSetup
 
 
 class OllamaAPI:
