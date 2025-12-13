@@ -20,7 +20,7 @@ async def send_settings_menu(message: Message) -> None:
     )
 
 
-@router.message(lambda m: get_menu(m.chat.id) == SETTINGS_MENU)
+@router.message(lambda m: get_menu(m.chat.id) == SETTINGS_MENU and (m.text or "").strip() != "Старт")
 async def handle_settings_selection(message: Message) -> None:
     text = (message.text or "").strip()
     chat_id = message.chat.id

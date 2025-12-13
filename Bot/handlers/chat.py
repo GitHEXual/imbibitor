@@ -39,7 +39,7 @@ async def handle_chat_message(message: Message) -> None:
         set_menu(chat_id, MAIN_MENU)
 
 
-@router.message(lambda m: get_menu(m.chat.id) == CHAT_MENU)
+@router.message(lambda m: get_menu(m.chat.id) == CHAT_MENU and (m.text or "").strip() != "Старт")
 async def handle_chat_menu(message: Message) -> None:
     text = (message.text or "").strip()
     

@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.types import Message
 
 from Bot.keyboards import start_keyboard
-from Bot.handlers.menu_state import DEFAULT_MENU, set_menu
+from Bot.handlers.menu_state import DEFAULT_MENU, get_menu, set_menu
 
 router = Router()
 
@@ -20,7 +20,7 @@ async def handle_start_command(message: Message) -> None:
     await send_start_menu(message)
 
 
-@router.message(lambda m: m.text == "Старт")
+@router.message(lambda m: m.text and m.text.strip() == "Старт")
 async def handle_start_button(message: Message) -> None:
     from Bot.handlers.main import send_main_menu
     await send_main_menu(message)

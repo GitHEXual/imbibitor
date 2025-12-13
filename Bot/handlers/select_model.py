@@ -11,7 +11,7 @@ ollama_client = OllamaClient()
 ollama_api = ollama_client.api
 
 
-@router.message(lambda m: get_menu(m.chat.id) == SELECT_MODEL_MENU)
+@router.message(lambda m: get_menu(m.chat.id) == SELECT_MODEL_MENU and (m.text or "").strip() != "Старт")
 async def handle_select_model_choice(message: Message) -> None:
     text = (message.text or "").strip()
     chat_id = message.chat.id
