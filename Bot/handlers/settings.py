@@ -3,12 +3,9 @@ from aiogram import Router
 from aiogram.types import Message
 
 from Bot.keyboards import settings_keyboard
-from Bot.handlers.menu_state import SELECT_MODEL_MENU, SETTINGS_MENU, get_menu, set_menu
-from OllamaClient.ollama_client import OllamaClient
+from Bot.handlers.menu_state import SELECT_MODEL_MENU, SETTINGS_MENU, get_menu, set_menu, ollama_client, ollama_api
 
 router = Router()
-ollama_client = OllamaClient()
-ollama_api = ollama_client.api
 
 
 async def send_settings_menu(message: Message) -> None:

@@ -1,4 +1,5 @@
 from typing import Dict
+from OllamaClient.ollama_client import OllamaClient
 
 DEFAULT_MENU = "start"
 MAIN_MENU = "main"
@@ -7,6 +8,10 @@ SELECT_MODEL_MENU = "select_model"
 CHAT_MENU = "chat"
 
 user_menu_state: Dict[int, str] = {}
+
+# Общий экземпляр OllamaClient для всех обработчиков
+ollama_client = OllamaClient()
+ollama_api = ollama_client.api
 
 
 def get_menu(chat_id: int) -> str:

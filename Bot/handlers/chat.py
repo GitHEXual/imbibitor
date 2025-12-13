@@ -3,12 +3,9 @@ from aiogram import Router
 from aiogram.types import Message
 
 from Bot.keyboards import chat_keyboard, main_keyboard
-from Bot.handlers.menu_state import CHAT_MENU, MAIN_MENU, get_menu, set_menu
-from OllamaClient.ollama_client import OllamaClient
+from Bot.handlers.menu_state import CHAT_MENU, MAIN_MENU, get_menu, set_menu, ollama_api
 
 router = Router()
-ollama_client = OllamaClient()
-ollama_api = ollama_client.api
 
 
 async def send_chat_menu(message: Message) -> None:
