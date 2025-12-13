@@ -7,8 +7,6 @@ from Bot.keyboards import chat_keyboard, main_keyboard
 from Bot.handlers.menu_state import ollama_api
 from Bot.handlers.states import MenuStates
 
-router = Router()
-
 
 async def send_chat_menu(message: Message, state: FSMContext) -> None:
     await state.set_state(MenuStates.chat)
@@ -38,14 +36,16 @@ async def handle_chat_message(message: Message, state: FSMContext) -> None:
         await send_main_menu(message, state)
 
 
-@router.message(MenuStates.chat, lambda m: (m.text or "").strip() != "Старт")
-async def handle_chat_menu(message: Message, state: FSMContext) -> None:
-    text = (message.text or "").strip()
-    
-    if text == "Назад":
-        from Bot.handlers.main import send_main_menu
-        await send_main_menu(message, state)
-        return
+def register_handlers(router: Router) -> None:
+    """Регистрирует обработчики чата"""
+    @router.message(MenuStates.chat, lambda m: (m.text or "").strip() != "Старт")
+    async def handle_chat_menu(message: Message, state: FSMContext) -> None:
+        text = (message.text or "").strip()
+        
+        if text == "Назад":
+            from Bot.handlers.main import send_main_menu
+            await send_main_menu(message, state)
+            return
 
-    await handle_chat_message(message, state)
+        await handle_chat_message(message, state)
 

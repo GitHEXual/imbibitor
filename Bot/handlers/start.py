@@ -5,8 +5,6 @@ from aiogram.types import Message
 from Bot.keyboards import start_keyboard
 from Bot.handlers.states import MenuStates
 
-router = Router()
-
 
 async def send_start_menu(message: Message, state: FSMContext) -> None:
     await state.set_state(MenuStates.start)
@@ -16,7 +14,9 @@ async def send_start_menu(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(lambda m: m.text == "/start")
-async def handle_start_command(message: Message, state: FSMContext) -> None:
-    await send_start_menu(message, state)
+def register_handlers(router: Router) -> None:
+    """Регистрирует обработчики стартового меню"""
+    @router.message(lambda m: m.text == "/start")
+    async def handle_start_command(message: Message, state: FSMContext) -> None:
+        await send_start_menu(message, state)
 

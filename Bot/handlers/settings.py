@@ -7,8 +7,6 @@ from Bot.keyboards import settings_keyboard
 from Bot.handlers.menu_state import ollama_client, ollama_api
 from Bot.handlers.states import MenuStates
 
-router = Router()
-
 
 async def send_settings_menu(message: Message, state: FSMContext) -> None:
     await state.set_state(MenuStates.settings)
@@ -19,16 +17,15 @@ async def send_settings_menu(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(MenuStates.settings, lambda m: (m.text or "").strip() != "Старт")
-async def handle_settings_selection(message: Message, state: FSMContext) -> None:
-    text = (message.text or "").strip()
-    
-    if text == "Назад":
+def register_handlers(router: Router) -> None:
+    """Регистрирует обработчики настроек"""
+    @router.message(MenuStates.settings, lambda m: m.text == "Назад")
+    async def handle_settings_back(message: Message, state: FSMContext) -> None:
         from Bot.handlers.main import send_main_menu
         await send_main_menu(message, state)
-        return
 
-    if text == "Выбрать модель":
+    @router.message(MenuStates.settings, lambda m: m.text == "Выбрать модель")
+    async def handle_select_model_button(message: Message, state: FSMContext) -> None:
         try:
             models = ollama_api.list_models()
         except requests.RequestException as exc:
@@ -45,13 +42,16 @@ async def handle_settings_selection(message: Message, state: FSMContext) -> None
             )
             return
 
+        # Сохраняем список моделей в FSM data для проверки
+        await state.update_data(available_models=models)
+        
         from Bot.keyboards import build_select_model_keyboard
         keyboard = build_select_model_keyboard(models)
         await state.set_state(MenuStates.select_model)
         await message.answer("Выберите модель.", reply_markup=keyboard)
-        return
 
-    if text == "Ollama sign in":
+    @router.message(MenuStates.settings, lambda m: m.text == "Ollama sign in")
+    async def handle_ollama_signin(message: Message, state: FSMContext) -> None:
         try:
             result = ollama_api.auth()
         except Exception as exc:  # pragma: no cover - subprocess output depends on env
@@ -64,9 +64,9 @@ async def handle_settings_selection(message: Message, state: FSMContext) -> None
                 result or "Вход выполнен.",
                 reply_markup=settings_keyboard,
             )
-        return
 
-    if text == "Ollama sign out":
+    @router.message(MenuStates.settings, lambda m: m.text == "Ollama sign out")
+    async def handle_ollama_signout(message: Message, state: FSMContext) -> None:
         try:
             result = ollama_api.logout()
         except Exception as exc:  # pragma: no cover - subprocess output depends on env
@@ -79,10 +79,4 @@ async def handle_settings_selection(message: Message, state: FSMContext) -> None
                 result or "Выход выполнен.",
                 reply_markup=settings_keyboard,
             )
-        return
-
-    await message.answer(
-        "Нажмите одну из кнопок настроек или 'Назад'.",
-        reply_markup=settings_keyboard,
-    )
 
