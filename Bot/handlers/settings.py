@@ -1,15 +1,17 @@
 import requests
 from aiogram import Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from Bot.keyboards import settings_keyboard
-from Bot.handlers.menu_state import SELECT_MODEL_MENU, SETTINGS_MENU, get_menu, set_menu, ollama_client, ollama_api
+from Bot.handlers.menu_state import ollama_client, ollama_api
+from Bot.handlers.states import MenuStates
 
 router = Router()
 
 
-async def send_settings_menu(message: Message) -> None:
-    set_menu(message.chat.id, SETTINGS_MENU)
+async def send_settings_menu(message: Message, state: FSMContext) -> None:
+    await state.set_state(MenuStates.settings)
     current_model = ollama_client.setup.default_model
     await message.answer(
         f"Настройки (текущая модель: {current_model}).",
@@ -17,14 +19,13 @@ async def send_settings_menu(message: Message) -> None:
     )
 
 
-@router.message(lambda m: get_menu(m.chat.id) == SETTINGS_MENU and (m.text or "").strip() != "Старт")
-async def handle_settings_selection(message: Message) -> None:
+@router.message(MenuStates.settings, lambda m: (m.text or "").strip() != "Старт")
+async def handle_settings_selection(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
-    chat_id = message.chat.id
     
     if text == "Назад":
         from Bot.handlers.main import send_main_menu
-        await send_main_menu(message)
+        await send_main_menu(message, state)
         return
 
     if text == "Выбрать модель":
@@ -46,7 +47,7 @@ async def handle_settings_selection(message: Message) -> None:
 
         from Bot.keyboards import build_select_model_keyboard
         keyboard = build_select_model_keyboard(models)
-        set_menu(chat_id, SELECT_MODEL_MENU)
+        await state.set_state(MenuStates.select_model)
         await message.answer("Выберите модель.", reply_markup=keyboard)
         return
 

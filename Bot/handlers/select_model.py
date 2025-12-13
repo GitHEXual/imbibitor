@@ -1,21 +1,22 @@
 import requests
 from aiogram import Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from Bot.keyboards import settings_keyboard
-from Bot.handlers.menu_state import SELECT_MODEL_MENU, SETTINGS_MENU, get_menu, set_menu, ollama_client, ollama_api
+from Bot.handlers.menu_state import ollama_client, ollama_api
+from Bot.handlers.states import MenuStates
 
 router = Router()
 
 
-@router.message(lambda m: get_menu(m.chat.id) == SELECT_MODEL_MENU and (m.text or "").strip() != "Старт")
-async def handle_select_model_choice(message: Message) -> None:
+@router.message(MenuStates.select_model, lambda m: (m.text or "").strip() != "Старт")
+async def handle_select_model_choice(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
-    chat_id = message.chat.id
     
     if text == "Назад":
         from Bot.handlers.settings import send_settings_menu
-        await send_settings_menu(message)
+        await send_settings_menu(message, state)
         return
 
     try:
@@ -25,7 +26,7 @@ async def handle_select_model_choice(message: Message) -> None:
             f"Ошибка при выборе модели: {exc}",
             reply_markup=settings_keyboard,
         )
-        set_menu(chat_id, SETTINGS_MENU)
+        await state.set_state(MenuStates.settings)
         return
 
     if success:
@@ -40,5 +41,5 @@ async def handle_select_model_choice(message: Message) -> None:
             reply_markup=settings_keyboard,
         )
 
-    set_menu(chat_id, SETTINGS_MENU)
+    await state.set_state(MenuStates.settings)
 

@@ -1,14 +1,15 @@
 from aiogram import Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from Bot.keyboards import start_keyboard
-from Bot.handlers.menu_state import DEFAULT_MENU, get_menu, set_menu
+from Bot.handlers.states import MenuStates
 
 router = Router()
 
 
-async def send_start_menu(message: Message) -> None:
-    set_menu(message.chat.id, DEFAULT_MENU)
+async def send_start_menu(message: Message, state: FSMContext) -> None:
+    await state.set_state(MenuStates.start)
     await message.answer(
         "Привет! Нажмите кнопку 'Старт', чтобы открыть главное меню.",
         reply_markup=start_keyboard,
@@ -16,12 +17,6 @@ async def send_start_menu(message: Message) -> None:
 
 
 @router.message(lambda m: m.text == "/start")
-async def handle_start_command(message: Message) -> None:
-    await send_start_menu(message)
-
-
-@router.message(lambda m: m.text and m.text.strip() == "Старт")
-async def handle_start_button(message: Message) -> None:
-    from Bot.handlers.main import send_main_menu
-    await send_main_menu(message)
+async def handle_start_command(message: Message, state: FSMContext) -> None:
+    await send_start_menu(message, state)
 
