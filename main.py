@@ -5,7 +5,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from Bot.handlers import router
-from OllamaClient.ollama_client import OllamaClient
 
 
 async def main():
@@ -16,9 +15,7 @@ async def main():
     bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
-    
-    ollama_client = OllamaClient()
-    
+
     await dp.start_polling(bot)
 
 
