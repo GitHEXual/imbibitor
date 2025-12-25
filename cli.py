@@ -8,6 +8,7 @@ from rag_system import (
     load_messages,
     MessageVectorStore,
     MessageRetriever,
+    HybridRetriever,
     PostGenerator
 )
 
@@ -110,6 +111,23 @@ def index(data_path, db_path, ollama_url, embedding_model, batch_size):
     help='Number of similar messages to return'
 )
 @click.option(
+    '--hybrid/--no-hybrid',
+    default=True,
+    help='Use hybrid search (semantic + keyword) or semantic only'
+)
+@click.option(
+    '--semantic-weight',
+    default=0.5,
+    type=float,
+    help='Weight for semantic search in hybrid mode (0.0-1.0)'
+)
+@click.option(
+    '--keyword-weight',
+    default=0.5,
+    type=float,
+    help='Weight for keyword search in hybrid mode (0.0-1.0)'
+)
+@click.option(
     '--db-path',
     default='./chroma_db',
     help='Path to ChromaDB database directory'
@@ -124,9 +142,10 @@ def index(data_path, db_path, ollama_url, embedding_model, batch_size):
     default='nomic-embed-text',
     help='Embedding model name'
 )
-def search(query, top_k, db_path, ollama_url, embedding_model):
-    """Search for similar messages."""
-    click.echo(f"Searching for: '{query}'")
+def search(query, top_k, hybrid, semantic_weight, keyword_weight, db_path, ollama_url, embedding_model):
+    """Search for similar messages using semantic or hybrid search."""
+    search_type = "hybrid (semantic + keyword)" if hybrid else "semantic"
+    click.echo(f"Searching for: '{query}' ({search_type})")
     
     if not os.path.exists(db_path):
         click.echo(f"Error: Database not found at {db_path}. Run 'index' first!", err=True)
@@ -138,11 +157,23 @@ def search(query, top_k, db_path, ollama_url, embedding_model):
     )
     
     vector_store = MessageVectorStore(persist_directory=db_path)
-    retriever = MessageRetriever(vector_store, embeddings_client)
+    
+    if hybrid:
+        retriever = HybridRetriever(
+            vector_store=vector_store,
+            embeddings_client=embeddings_client,
+            semantic_weight=semantic_weight,
+            keyword_weight=keyword_weight
+        )
+    else:
+        retriever = MessageRetriever(vector_store, embeddings_client)
     
     click.echo(f"Finding {top_k} similar messages...")
     try:
-        results = retriever.retrieve(query, top_k=top_k)
+        if hybrid:
+            results = retriever.retrieve(query, top_k=top_k, use_hybrid=True)
+        else:
+            results = retriever.retrieve(query, top_k=top_k)
         
         if not results:
             click.echo("No similar messages found.")
@@ -152,9 +183,16 @@ def search(query, top_k, db_path, ollama_url, embedding_model):
         for i, msg in enumerate(results, 1):
             metadata = msg.get("metadata", {})
             distance = msg.get("distance")
+            hybrid_score = msg.get("hybrid_score")
+            semantic_score = msg.get("semantic_score")
+            keyword_score = msg.get("keyword_score")
+            
             click.echo(f"{i}. [{metadata.get('from', 'Unknown')}, {metadata.get('date', '')}]")
             click.echo(f"   Text: {msg.get('text', '')[:200]}...")
-            if distance is not None:
+            
+            if hybrid and hybrid_score is not None:
+                click.echo(f"   Hybrid Score: {hybrid_score:.4f} (semantic: {semantic_score:.4f}, keyword: {keyword_score:.4f})")
+            elif distance is not None:
                 click.echo(f"   Distance: {distance:.4f}")
             click.echo()
     except Exception as e:
@@ -173,6 +211,23 @@ def search(query, top_k, db_path, ollama_url, embedding_model):
     '--top-k',
     default=5,
     help='Number of similar messages to use as context'
+)
+@click.option(
+    '--hybrid/--no-hybrid',
+    default=True,
+    help='Use hybrid search (semantic + keyword) or semantic only'
+)
+@click.option(
+    '--semantic-weight',
+    default=0.5,
+    type=float,
+    help='Weight for semantic search in hybrid mode (0.0-1.0)'
+)
+@click.option(
+    '--keyword-weight',
+    default=0.5,
+    type=float,
+    help='Weight for keyword search in hybrid mode (0.0-1.0)'
 )
 @click.option(
     '--db-path',
@@ -205,11 +260,12 @@ def search(query, top_k, db_path, ollama_url, embedding_model):
     type=int,
     help='Maximum tokens to generate'
 )
-def generate(topic, query, top_k, db_path, ollama_url, embedding_model, 
+def generate(topic, query, top_k, hybrid, semantic_weight, keyword_weight, db_path, ollama_url, embedding_model, 
              llm_model, temperature, max_tokens):
     """Generate a post on the given topic using similar messages."""
+    search_type = "hybrid (semantic + keyword)" if hybrid else "semantic"
     click.echo(f"Generating post on topic: '{topic}'")
-    click.echo(f"Search query: '{query}'")
+    click.echo(f"Search query: '{query}' ({search_type})")
     
     if not os.path.exists(db_path):
         click.echo(f"Error: Database not found at {db_path}. Run 'index' first!", err=True)
@@ -243,13 +299,26 @@ def generate(topic, query, top_k, db_path, ollama_url, embedding_model,
     
     # Initialize components
     vector_store = MessageVectorStore(persist_directory=db_path)
-    retriever = MessageRetriever(vector_store, embeddings_client)
+    
+    if hybrid:
+        retriever = HybridRetriever(
+            vector_store=vector_store,
+            embeddings_client=embeddings_client,
+            semantic_weight=semantic_weight,
+            keyword_weight=keyword_weight
+        )
+    else:
+        retriever = MessageRetriever(vector_store, embeddings_client)
+    
     generator = PostGenerator(llm_client)
     
     # Retrieve similar messages
     click.echo(f"Finding {top_k} similar messages...")
     try:
-        similar_messages = retriever.retrieve(query, top_k=top_k)
+        if hybrid:
+            similar_messages = retriever.retrieve(query, top_k=top_k, use_hybrid=True)
+        else:
+            similar_messages = retriever.retrieve(query, top_k=top_k)
         
         if not similar_messages:
             click.echo("No similar messages found. Cannot generate post.", err=True)
