@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Создать базу данных - RAG System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="mb-0">
+                    <i class="bi bi-database-add"></i> Создать новую базу данных
+                </h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">
+                    Загрузите JSON файл с сообщениями (например, экспорт из Telegram) для создания векторной базы данных.
+                    Система автоматически проиндексирует все текстовые сообщения.
+                </p>
+                
+                <form method="POST" enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-4">
+                        {{ form.db_name.label(class="form-label fw-bold") }}
+                        {{ form.db_name(class="form-control form-control-lg") }}
+                        {% if form.db_name.errors %}
+                            <div class="text-danger mt-2">
+                                {% for error in form.db_name.errors %}
+                                    <small><i class="bi bi-exclamation-circle"></i> {{ error }}</small><br>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Уникальное название для вашей базы данных</small>
+                    </div>
+                    
+                    <div class="mb-4">
+                        {{ form.json_file.label(class="form-label fw-bold") }}
+                        <div class="input-group input-group-lg">
+                            {{ form.json_file(class="form-control") }}
+                        </div>
+                        {% if form.json_file.errors %}
+                            <div class="text-danger mt-2">
+                                {% for error in form.json_file.errors %}
+                                    <small><i class="bi bi-exclamation-circle"></i> {{ error }}</small><br>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">
+                            <i class="bi bi-file-earmark-code"></i> Выберите JSON файл с сообщениями (формат Telegram export)
+                        </small>
+                    </div>
+                    
+                    <div class="mb-4">
+                        {{ form.batch_size.label(class="form-label fw-bold") }}
+                        {{ form.batch_size(class="form-control") }}
+                        {% if form.batch_size.errors %}
+                            <div class="text-danger mt-2">
+                                {% for error in form.batch_size.errors %}
+                                    <small><i class="bi bi-exclamation-circle"></i> {{ error }}</small><br>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Размер батча для обработки (рекомендуется: 100)</small>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('main.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Отмена
+                        </a>
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-info-circle"></i> Информация
+                </h5>
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        <strong>Формат файла:</strong> JSON (экспорт из Telegram)
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        <strong>Обработка:</strong> Автоматическая индексация всех текстовых сообщений
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        <strong>Модель embeddings:</strong> {{ settings.embedding_model }}
+                    </li>
+                    <li>
+                        <i class="bi bi-check-circle text-success"></i>
+                        <strong>Ollama URL:</strong> {{ settings.ollama_url }}
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

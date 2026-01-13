@@ -1,6 +1,7 @@
 """WTForms forms for Flask application."""
 
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms import StringField, PasswordField, SelectField, SubmitField, BooleanField, IntegerField, FloatField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, NumberRange, Optional
 import re
@@ -137,3 +138,27 @@ class RAGQueryForm(FlaskForm):
     )
     search_submit = SubmitField('Поиск')
     generate_submit = SubmitField('Генерация поста')
+
+
+class IndexForm(FlaskForm):
+    """Form for indexing messages into database."""
+    
+    db_name = StringField(
+        'Название базы данных',
+        validators=[DataRequired(), Length(min=1, max=255)],
+        render_kw={'placeholder': 'Введите название базы данных...'}
+    )
+    json_file = FileField(
+        'JSON файл с сообщениями',
+        validators=[
+            FileRequired(message='Необходимо выбрать файл'),
+            FileAllowed(['json'], message='Разрешены только JSON файлы')
+        ]
+    )
+    batch_size = IntegerField(
+        'Размер батча',
+        validators=[Optional(), NumberRange(min=1, max=1000)],
+        default=100,
+        render_kw={'placeholder': '100'}
+    )
+    submit = SubmitField('Создать базу данных')

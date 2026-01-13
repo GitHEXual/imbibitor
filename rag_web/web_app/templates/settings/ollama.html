@@ -7,54 +7,67 @@
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <h3>Настройки Ollama</h3>
+                <h2 class="mb-0">
+                    <i class="bi bi-gear"></i> Настройки Ollama
+                </h2>
             </div>
             <div class="card-body">
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     
-                    <div class="mb-3">
-                        {{ form.ollama_url.label(class="form-label") }}
-                        {{ form.ollama_url(class="form-control") }}
+                    <div class="mb-4">
+                        {{ form.ollama_url.label(class="form-label fw-bold") }}
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+                            {{ form.ollama_url(class="form-control") }}
+                        </div>
                         <small class="form-text text-muted">URL для подключения к Ollama API (например: http://localhost:11434)</small>
                         {% if form.ollama_url.errors %}
-                            <div class="text-danger">
+                            <div class="text-danger mt-2">
                                 {% for error in form.ollama_url.errors %}
-                                    <small>{{ error }}</small>
+                                    <small><i class="bi bi-exclamation-circle"></i> {{ error }}</small><br>
                                 {% endfor %}
                             </div>
                         {% endif %}
                     </div>
                     
-                    <div class="mb-3">
-                        {{ form.embedding_model.label(class="form-label") }}
-                        {{ form.embedding_model(class="form-select") }}
+                    <div class="mb-4">
+                        {{ form.embedding_model.label(class="form-label fw-bold") }}
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-diagram-3"></i></span>
+                            {{ form.embedding_model(class="form-select") }}
+                        </div>
                         <small class="form-text text-muted">Модель для создания embeddings (векторных представлений текста)</small>
                         {% if form.embedding_model.errors %}
-                            <div class="text-danger">
+                            <div class="text-danger mt-2">
                                 {% for error in form.embedding_model.errors %}
-                                    <small>{{ error }}</small>
+                                    <small><i class="bi bi-exclamation-circle"></i> {{ error }}</small><br>
                                 {% endfor %}
                             </div>
                         {% endif %}
                     </div>
                     
-                    <div class="mb-3">
-                        {{ form.llm_model.label(class="form-label") }}
-                        {{ form.llm_model(class="form-select") }}
+                    <div class="mb-4">
+                        {{ form.llm_model.label(class="form-label fw-bold") }}
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-cpu"></i></span>
+                            {{ form.llm_model(class="form-select") }}
+                        </div>
                         <small class="form-text text-muted">Модель для генерации текста (LLM)</small>
                         {% if form.llm_model.errors %}
-                            <div class="text-danger">
+                            <div class="text-danger mt-2">
                                 {% for error in form.llm_model.errors %}
-                                    <small>{{ error }}</small>
+                                    <small><i class="bi bi-exclamation-circle"></i> {{ error }}</small><br>
                                 {% endfor %}
                             </div>
                         {% endif %}
                     </div>
                     
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{{ url_for('main.index') }}" class="btn btn-secondary">Отмена</a>
-                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('main.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Отмена
+                        </a>
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
                     </div>
                 </form>
             </div>
@@ -64,12 +77,23 @@
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
-                <h5>Текущие настройки</h5>
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle"></i> Текущие настройки
+                </h5>
             </div>
             <div class="card-body">
-                <p><strong>Ollama URL:</strong><br>{{ settings.ollama_url }}</p>
-                <p><strong>Embedding модель:</strong><br>{{ settings.embedding_model }}</p>
-                <p><strong>LLM модель:</strong><br>{{ settings.llm_model }}</p>
+                <div class="mb-3">
+                    <strong><i class="bi bi-link-45deg"></i> Ollama URL:</strong><br>
+                    <code class="text-break">{{ settings.ollama_url }}</code>
+                </div>
+                <div class="mb-3">
+                    <strong><i class="bi bi-diagram-3"></i> Embedding модель:</strong><br>
+                    <code>{{ settings.embedding_model }}</code>
+                </div>
+                <div>
+                    <strong><i class="bi bi-cpu"></i> LLM модель:</strong><br>
+                    <code>{{ settings.llm_model }}</code>
+                </div>
             </div>
         </div>
     </div>

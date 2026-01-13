@@ -41,12 +41,17 @@ def create_app(config_name='development'):
         return db.session.get(User, int(user_id))
     
     # Register blueprints
-    from web_app.routes import auth, main, settings, rag
+    from web_app.routes import auth, main, settings, rag, indexing
     
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
     app.register_blueprint(settings.bp)
     app.register_blueprint(rag.bp)
+    app.register_blueprint(indexing.bp)
+    
+    # Configure file upload
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+    app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), '..', 'uploads')
     
     # Create database tables
     with app.app_context():
