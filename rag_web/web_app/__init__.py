@@ -41,11 +41,12 @@ def create_app(config_name='development'):
         return db.session.get(User, int(user_id))
     
     # Register blueprints
-    from web_app.routes import auth, main, settings
+    from web_app.routes import auth, main, settings, rag
     
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
     app.register_blueprint(settings.bp)
+    app.register_blueprint(rag.bp)
     
     # Create database tables
     with app.app_context():

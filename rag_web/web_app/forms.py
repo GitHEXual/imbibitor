@@ -1,8 +1,8 @@
 """WTForms forms for Flask application."""
 
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SelectField, SubmitField, BooleanField
-from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError
+from wtforms import StringField, PasswordField, SelectField, SubmitField, BooleanField, IntegerField, FloatField
+from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, NumberRange, Optional
 import re
 from web_app.models import User
 
@@ -101,3 +101,39 @@ class OllamaSettingsForm(FlaskForm):
         coerce=str
     )
     submit = SubmitField('Сохранить настройки')
+
+
+class RAGQueryForm(FlaskForm):
+    """RAG query form for search and generation."""
+    
+    query = StringField(
+        'Поисковый запрос',
+        validators=[DataRequired()],
+        render_kw={'placeholder': 'Введите запрос для поиска...'}
+    )
+    topic = StringField(
+        'Тема для генерации поста (необязательно)',
+        validators=[Optional()],
+        render_kw={'placeholder': 'Оставьте пустым, если нужен только поиск'}
+    )
+    top_k = IntegerField(
+        'Количество результатов',
+        validators=[DataRequired(), NumberRange(min=1, max=50)],
+        default=5
+    )
+    use_hybrid = BooleanField(
+        'Использовать гибридный поиск (семантический + keyword)',
+        default=True
+    )
+    semantic_weight = FloatField(
+        'Вес семантического поиска',
+        validators=[DataRequired(), NumberRange(min=0.0, max=1.0)],
+        default=0.5
+    )
+    keyword_weight = FloatField(
+        'Вес keyword поиска',
+        validators=[DataRequired(), NumberRange(min=0.0, max=1.0)],
+        default=0.5
+    )
+    search_submit = SubmitField('Поиск')
+    generate_submit = SubmitField('Генерация поста')

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}RAG Запрос - {{ collection_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2>RAG Запрос: {{ collection_name }}</h2>
+                <a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary">← Назад к списку БД</a>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Коллекция:</strong> {{ collection_name }}<br>
+                    <strong>Документов:</strong> {{ collection_info.count }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>Форма запроса</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        {{ form.query.label(class="form-label") }}
+                        {{ form.query(class="form-control") }}
+                        {% if form.query.errors %}
+                            <div class="text-danger">
+                                {% for error in form.query.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.topic.label(class="form-label") }}
+                        {{ form.topic(class="form-control") }}
+                        {% if form.topic.errors %}
+                            <div class="text-danger">
+                                {% for error in form.topic.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Укажите тему для генерации поста (необязательно)</small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            {{ form.top_k.label(class="form-label") }}
+                            {{ form.top_k(class="form-control") }}
+                            {% if form.top_k.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.top_k.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            {{ form.semantic_weight.label(class="form-label") }}
+                            {{ form.semantic_weight(class="form-control") }}
+                            {% if form.semantic_weight.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.semantic_weight.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            {{ form.keyword_weight.label(class="form-label") }}
+                            {{ form.keyword_weight(class="form-control") }}
+                            {% if form.keyword_weight.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.keyword_weight.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            <div class="form-check mt-4">
+                                {{ form.use_hybrid(class="form-check-input") }}
+                                {{ form.use_hybrid.label(class="form-check-label") }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        {{ form.search_submit(class="btn btn-primary") }}
+                        {{ form.generate_submit(class="btn btn-success") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if generated_post %}
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4>Сгенерированный пост</h4>
+            </div>
+            <div class="card-body">
+                <div class="bg-light p-3 rounded">
+                    <pre style="white-space: pre-wrap; font-family: inherit;">{{ generated_post }}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if results %}
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>Результаты поиска ({{ results|length }})</h4>
+            </div>
+            <div class="card-body">
+                {% for result in results %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <strong>#{{ loop.index }}</strong>
+                                {% if result.metadata %}
+                                <span class="text-muted ms-2">
+                                    [{{ result.metadata.get('from', 'Unknown') }}, {{ result.metadata.get('date', '') }}]
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div>
+                                {% if result.distance is not none %}
+                                <span class="badge bg-secondary">Distance: {{ "%.4f"|format(result.distance) }}</span>
+                                {% endif %}
+                                {% if result.hybrid_score is not none %}
+                                <span class="badge bg-primary">Hybrid: {{ "%.4f"|format(result.hybrid_score) }}</span>
+                                {% endif %}
+                                {% if result.semantic_score is not none %}
+                                <span class="badge bg-info">Semantic: {{ "%.4f"|format(result.semantic_score) }}</span>
+                                {% endif %}
+                                {% if result.keyword_score is not none %}
+                                <span class="badge bg-warning">Keyword: {{ "%.4f"|format(result.keyword_score) }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <p class="mb-0">{{ result.text }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

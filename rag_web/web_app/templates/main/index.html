@@ -6,23 +6,44 @@
 <div class="row">
     <div class="col-md-12">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h2>Добро пожаловать, {{ current_user.username }}!</h2>
+                <a href="{{ url_for('settings.ollama') }}" class="btn btn-outline-primary">Настройки Ollama</a>
             </div>
             <div class="card-body">
                 <p class="lead">RAG система для поиска и генерации постов</p>
                 
-                <div class="row mt-4">
-                    <div class="col-md-6">
-                        <div class="card">
+                <hr>
+                
+                <h3 class="mt-4 mb-3">Базы данных</h3>
+                
+                {% if databases %}
+                <div class="row">
+                    {% for db in databases %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card h-100">
                             <div class="card-body">
-                                <h5 class="card-title">Настройки Ollama</h5>
-                                <p class="card-text">Настройте подключение к Ollama и выберите модели для работы.</p>
-                                <a href="{{ url_for('settings.ollama') }}" class="btn btn-primary">Настроить</a>
+                                <h5 class="card-title">{{ db.name }}</h5>
+                                <p class="card-text">
+                                    <small class="text-muted">Коллекция: {{ db.collection_name }}</small><br>
+                                    {% if db.description %}
+                                    <small>{{ db.description }}</small><br>
+                                    {% endif %}
+                                    <strong>Документов:</strong> {{ db.count }}
+                                </p>
+                                <a href="{{ url_for('rag.query', collection_name=db.collection_name) }}" class="btn btn-primary">
+                                    Открыть запросы
+                                </a>
                             </div>
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p class="mb-0">Базы данных не найдены. Создайте коллекцию через CLI или веб-интерфейс.</p>
+                </div>
+                {% endif %}
                 
                 <div class="mt-4">
                     <a href="{{ url_for('auth.logout') }}" class="btn btn-secondary">Выход</a>

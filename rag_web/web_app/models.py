@@ -48,3 +48,21 @@ class UserSettings(db.Model):
     
     def __repr__(self):
         return f'<UserSettings user_id={self.user_id}>'
+
+
+class Database(db.Model):
+    """Database model for storing information about ChromaDB collections."""
+    
+    __tablename__ = 'databases'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    collection_name = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    db_path = db.Column(db.String(500), nullable=False, default='./chroma_db')
+    description = db.Column(db.Text, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Database {self.name} ({self.collection_name})>'
