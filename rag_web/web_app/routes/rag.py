@@ -14,6 +14,12 @@ bp = Blueprint('rag', __name__, url_prefix='/rag')
 @login_required
 def query(collection_name: str):
     """RAG query page for a specific collection."""
+    # Verify user has access to this collection
+    user_prefix = f"user_{current_user.id}_"
+    if not collection_name.startswith(user_prefix):
+        flash('У вас нет доступа к этой коллекции.', 'error')
+        return redirect(url_for('main.index'))
+    
     # Check if collection exists
     if not collection_exists(collection_name):
         flash(f'Коллекция "{collection_name}" не найдена.', 'error')
@@ -52,6 +58,7 @@ def query(collection_name: str):
                     keyword_weight=form.keyword_weight.data,
                     ollama_url=settings.ollama_url,
                     embedding_model=settings.embedding_model,
+                    user_id=current_user.id,
                     db_path=None  # Use default path
                 )
                 
@@ -77,6 +84,7 @@ def query(collection_name: str):
                             ollama_url=settings.ollama_url,
                             embedding_model=settings.embedding_model,
                             llm_model=settings.llm_model,
+                            user_id=current_user.id,
                             temperature=0.7,
                             max_tokens=1000,
                             db_path=None  # Use default path

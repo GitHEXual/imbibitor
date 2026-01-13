@@ -73,12 +73,55 @@ def create():
                 os.remove(str(file_path))
                 return render_template('indexing/create.html', form=form, settings=settings)
             
-            # Get collection name from form
-            collection_name = form.db_name.data.strip()
+            # Get display name from form
+            display_name = form.db_name.data.strip()
+            
+            # Convert display name to valid ChromaDB collection name
+            # ChromaDB requires: [a-zA-Z0-9._-], 3-512 chars, start/end with alphanumeric
+            import re
+            import unicodedata
+            
+            def sanitize_collection_name(name: str, user_id: int) -> str:
+                """Convert display name to valid ChromaDB collection name."""
+                # Remove accents and convert to ASCII
+                name = unicodedata.normalize('NFKD', name)
+                name = name.encode('ascii', 'ignore').decode('ascii')
+                
+                # Replace spaces and special chars with underscores
+                name = re.sub(r'[^a-zA-Z0-9._-]', '_', name)
+                
+                # Remove multiple underscores
+                name = re.sub(r'_+', '_', name)
+                
+                # Remove leading/trailing underscores and dots
+                name = name.strip('._-')
+                
+                # Ensure it starts and ends with alphanumeric
+                if not name[0].isalnum():
+                    name = 'db_' + name
+                if not name[-1].isalnum():
+                    name = name + '_db'
+                
+                # Ensure minimum length
+                if len(name) < 3:
+                    name = name + '_db'
+                
+                # Ensure max length (ChromaDB limit is 512, but we need space for user_{user_id}_ prefix)
+                # MessageVectorStore will add user_{user_id}_ prefix automatically
+                if len(name) > 480:
+                    name = name[:480]
+                
+                return name
+            
+            # Get sanitized collection name (without user prefix - MessageVectorStore adds it)
+            sanitized_name = sanitize_collection_name(display_name, current_user.id)
+            
+            # Full collection name with user prefix for checking existence
+            full_collection_name = f"user_{current_user.id}_{sanitized_name}"
             
             # Check if collection already exists
-            if collection_exists(collection_name):
-                flash(f'База данных с именем "{collection_name}" уже существует. Выберите другое имя.', 'error')
+            if collection_exists(full_collection_name):
+                flash(f'База данных с именем "{display_name}" уже существует. Выберите другое имя.', 'error')
                 os.remove(str(file_path))
                 return render_template('indexing/create.html', form=form, settings=settings)
             
@@ -96,10 +139,12 @@ def create():
                     'warning'
                 )
             
-            # Create vector store with collection name
+            # Create vector store with collection name and user_id for isolation
+            # MessageVectorStore will automatically create collection name as user_{user_id}_{collection_name}
             db_path = str(imbibitor_path / 'chroma_db')
             vector_store = MessageVectorStore(
-                collection_name=collection_name,
+                user_id=current_user.id,
+                collection_name=sanitized_name,
                 persist_directory=db_path
             )
             
@@ -124,7 +169,7 @@ def create():
             os.remove(str(file_path))
             
             flash(
-                f'База данных "{collection_name}" успешно создана! Проиндексировано {indexed_count} сообщений.',
+                f'База данных "{display_name}" успешно создана! Проиндексировано {indexed_count} сообщений.',
                 'success'
             )
             return redirect(url_for('main.index'))

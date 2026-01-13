@@ -33,16 +33,18 @@ def get_chromadb_client(db_path: str = None) -> chromadb.PersistentClient:
     )
 
 
-def list_collections(db_path: str = None) -> List[Dict[str, Any]]:
+def list_collections(db_path: str = None, user_id: int = None) -> List[Dict[str, Any]]:
     """
-    Get list of all ChromaDB collections.
+    Get list of ChromaDB collections, optionally filtered by user_id.
     
     Args:
         db_path: Path to ChromaDB database directory
+        user_id: If provided, only return collections for this user (prefixed with user_{user_id}_)
     
     Returns:
         List of dictionaries with collection information:
-        - name: collection name
+        - name: collection name (display name without user prefix)
+        - collection_name: full collection name
         - count: number of documents
         - metadata: collection metadata
     """
@@ -51,14 +53,31 @@ def list_collections(db_path: str = None) -> List[Dict[str, Any]]:
         collections = client.list_collections()
         
         result = []
+        user_prefix = f"user_{user_id}_" if user_id is not None else None
+        
         for collection in collections:
+            collection_name = collection.name
+            
+            # Filter by user prefix if user_id provided
+            if user_prefix:
+                if not collection_name.startswith(user_prefix):
+                    continue
+                # Extract display name (remove user prefix)
+                display_name = collection_name[len(user_prefix):]
+            else:
+                # If no user_id, skip user-specific collections
+                if collection_name.startswith("user_") and "_" in collection_name[5:]:
+                    continue
+                display_name = collection_name
+            
             try:
                 count = collection.count()
             except Exception:
                 count = 0
             
             result.append({
-                'name': collection.name,
+                'name': display_name,
+                'collection_name': collection_name,
                 'count': count,
                 'metadata': collection.metadata or {}
             })

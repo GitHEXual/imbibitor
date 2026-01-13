@@ -17,15 +17,17 @@ def get_rag_components(
     collection_name: str,
     ollama_url: str,
     embedding_model: str,
+    user_id: int = None,
     db_path: str = None
 ):
     """
     Initialize RAG components for a specific collection.
     
     Args:
-        collection_name: Name of the ChromaDB collection
+        collection_name: Full name of the ChromaDB collection (with user prefix)
         ollama_url: Ollama API base URL
         embedding_model: Embedding model name
+        user_id: User ID for isolation (extracted from collection_name if None)
         db_path: Path to ChromaDB database directory
     
     Returns:
@@ -35,17 +37,36 @@ def get_rag_components(
         if db_path is None:
             db_path = str(imbibitor_path / 'chroma_db')
         
+        # Extract user_id and collection name from full collection name
+        if user_id is None and collection_name.startswith("user_"):
+            # Extract user_id from collection name like "user_1_db_name"
+            parts = collection_name.split("_", 2)
+            if len(parts) >= 3 and parts[0] == "user" and parts[1].isdigit():
+                user_id = int(parts[1])
+                base_collection_name = parts[2] if len(parts) > 2 else "messages"
+            else:
+                base_collection_name = collection_name
+        else:
+            base_collection_name = collection_name
+        
         # Initialize embeddings client
         embeddings_client = OllamaEmbeddings(
             model=embedding_model,
             base_url=ollama_url
         )
         
-        # Initialize vector store with specific collection
-        vector_store = MessageVectorStore(
-            collection_name=collection_name,
-            persist_directory=db_path
-        )
+        # Initialize vector store with user_id and collection name
+        if user_id is not None:
+            vector_store = MessageVectorStore(
+                user_id=user_id,
+                collection_name=base_collection_name,
+                persist_directory=db_path
+            )
+        else:
+            vector_store = MessageVectorStore(
+                collection_name=base_collection_name,
+                persist_directory=db_path
+            )
         
         return vector_store, embeddings_client
     except Exception as e:
@@ -61,13 +82,14 @@ def perform_search(
     keyword_weight: float,
     ollama_url: str,
     embedding_model: str,
+    user_id: int = None,
     db_path: str = None
 ) -> List[Dict[str, Any]]:
     """
     Perform RAG search on a collection.
     
     Args:
-        collection_name: Name of the ChromaDB collection
+        collection_name: Full name of the ChromaDB collection (with user prefix)
         query: Search query
         top_k: Number of results to return
         use_hybrid: Whether to use hybrid search
@@ -75,13 +97,14 @@ def perform_search(
         keyword_weight: Weight for keyword search
         ollama_url: Ollama API base URL
         embedding_model: Embedding model name
+        user_id: User ID for isolation
         db_path: Path to ChromaDB database directory
     
     Returns:
         List of search results with metadata
     """
     vector_store, embeddings_client = get_rag_components(
-        collection_name, ollama_url, embedding_model, db_path
+        collection_name, ollama_url, embedding_model, user_id, db_path
     )
     
     if vector_store is None or embeddings_client is None:
@@ -114,6 +137,7 @@ def generate_post(
     ollama_url: str,
     embedding_model: str,
     llm_model: str,
+    user_id: int = None,
     temperature: float = 0.7,
     max_tokens: int = 1000,
     db_path: str = None
@@ -122,7 +146,7 @@ def generate_post(
     Generate a post based on search results.
     
     Args:
-        collection_name: Name of the ChromaDB collection
+        collection_name: Full name of the ChromaDB collection (with user prefix)
         topic: Topic for the post
         query: Search query
         top_k: Number of results to use
@@ -132,6 +156,7 @@ def generate_post(
         ollama_url: Ollama API base URL
         embedding_model: Embedding model name
         llm_model: LLM model name
+        user_id: User ID for isolation
         temperature: Temperature for generation
         max_tokens: Maximum tokens to generate
         db_path: Path to ChromaDB database directory
@@ -149,6 +174,7 @@ def generate_post(
         keyword_weight=keyword_weight,
         ollama_url=ollama_url,
         embedding_model=embedding_model,
+        user_id=user_id,
         db_path=db_path
     )
     
